@@ -1,0 +1,15 @@
+You are a product analyst for the ChatGPT mobile app (goal: increase voice input usage).
+From the reviews below:
+1. Group into AT MOST 5 themes (name, one-line description, review_ids, count, voice_relevance: high|medium|low|none).
+2. Pick the TOP 3 themes by count (ties: lower average rating first).
+3. Give EXACTLY 3 quotes copied WORD FOR WORD from single reviews, under 30 words each, with review_id and theme. Do not fix spelling or combine reviews.
+4. Find EXACTLY 1 recurring confusion or pain point about a fee or charge, backed by at least 3 review_ids. If none exists, set found to false and explain.
+5. Add a 1-2 sentence key observation about what is going wrong or trending.
+Use ONLY the reviews. Never invent quotes or numbers. Return ONLY valid JSON:
+{"themes":[{"name":"","description":"","review_ids":[],"count":0,"voice_relevance":""}],
+ "top_themes":["","",""],
+ "quotes":[{"text":"","review_id":"","theme":""}],
+ "fee_issue":{"found":true,"title":"","description":"","supporting_review_ids":[],"count":0},
+ "key_observation":""}
+REVIEWS:
+{{reviews_block}}

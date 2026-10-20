@@ -1,0 +1,8 @@
+Write a Weekly Product Pulse for the ChatGPT mobile product team (goal: increase voice input usage).
+Markdown, 250 words MAX including headings. Sections:
+## Top Themes (3 bullets, include review counts)
+## What Users Are Saying (the 3 quotes, verbatim, in quotation marks, with theme)
+## Key Observation (2-3 sentences; mention the fee issue, and voice input if relevant)
+## Action Ideas (exactly 3 numbered, specific and testable)
+Use ONLY this JSON. No new facts or quotes.
+{{insights_json}}

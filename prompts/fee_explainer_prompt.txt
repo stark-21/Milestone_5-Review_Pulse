@@ -1,0 +1,8 @@
+Write a customer Fee Explainer for support teams.
+Issue found in reviews: {{fee_issue_title}} - {{fee_issue_description}}
+Use ONLY these official source facts (do not add outside facts): {{source_facts}}
+Links: 1) {{source_url_1}}  2) {{source_url_2}}
+Rules: 6 bullets MAX; neutral, facts-only; no apology, promises, blame or marketing;
+no exact prices or limits unless they appear in the source facts; no words
+"sorry", "unfortunately", "guarantee", "always", "never".
+Return ONLY JSON: {"bullets":[],"source_links":["url1","url2"],"last_checked":"YYYY-MM-DD"}

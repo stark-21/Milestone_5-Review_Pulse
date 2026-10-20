@@ -1,0 +1,609 @@
+{
+  "name": "Milestone 5 - Review Pulse copy",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Upload reviews CSV",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Reviews CSV",
+              "fieldType": "file",
+              "acceptFileTypes": ".csv"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        -112,
+        0
+      ],
+      "id": "48205c1b-6e0a-4ce6-8daf-d3982ae43358",
+      "name": "Upload Reviews",
+      "webhookId": "1c43384a-0145-481e-90b4-22f726129147"
+    },
+    {
+      "parameters": {
+        "binaryPropertyName": "Reviews_CSV",
+        "options": {
+          "headerRow": true
+        }
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        112,
+        0
+      ],
+      "id": "77623815-ec23-4971-b39c-3db3aea2ad0c",
+      "name": "Read CSV"
+    },
+    {
+      "parameters": {
+        "jsCode": "const MAX_ROWS = 700;\nconst CHARGE_WORD = /\\b(charge|billing|subscription|refund|price|renew|plus|paid)\\b/i;\n\nconst rows = $input.all().map((item) => item.json);\n\nconst seenIds = new Set();\nconst seenTexts = new Set();\nconst valid = [];\n\nfor (const row of rows) {\n  const reviewId = String(row.review_id ?? '').trim();\n  const text = String(row.text ?? '').replace(/\\s+/g, ' ').trim();\n  const rating = Number(row.rating);\n  const date = String(row.date ?? '').trim().slice(0, 10);\n  if (!reviewId || !text || !date || !Number.isFinite(rating)) continue;\n  if (seenIds.has(reviewId) || seenTexts.has(text)) continue;\n  seenIds.add(reviewId);\n  seenTexts.add(text);\n  valid.push({ review_id: reviewId, rating, date, text });\n}\n\nconst chargeRows = valid.filter((row) => CHARGE_WORD.test(row.text));\nconst otherRows = valid.filter((row) => !CHARGE_WORD.test(row.text));\nconst selected = chargeRows.concat(otherRows).slice(0, MAX_ROWS);\n\nconst reviews_block = selected\n  .map((row) => '[' + row.review_id + '] (' + row.rating + ', ' + row.date + ') ' + row.text)\n  .join('\\n');\nconst all_text = selected.map((row) => row.text).join('\\n');\nconst valid_ids = selected.map((row) => row.review_id);\nconst review_count = selected.length;\n\nreturn [{ json: { reviews_block, all_text, valid_ids, review_count } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        304,
+        0
+      ],
+      "id": "5bdbc3e9-a4a1-43ca-8721-55a4ceaa8800",
+      "name": "Format Reviews"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a product analyst for the ChatGPT mobile app (goal: increase voice input usage).\nFrom the reviews below:\n1. Group into AT MOST 5 themes (name, one-line description, review_ids, count, voice_relevance: high|medium|low|none).\n2. Pick the TOP 3 themes by count (ties: lower average rating first).\n3. Give EXACTLY 3 quotes copied WORD FOR WORD from single reviews, under 30 words each, with review_id and theme. Do not fix spelling or combine reviews.\n4. Find EXACTLY 1 recurring confusion or pain point about a fee or charge, backed by at least 3 review_ids. If none exists, set found to false and explain.\n5. Add a 1-2 sentence key observation about what is going wrong or trending.\nUse ONLY the reviews. Never invent quotes or numbers. Return ONLY valid JSON:\n{\"themes\":[{\"name\":\"\",\"description\":\"\",\"review_ids\":[],\"count\":0,\"voice_relevance\":\"\"}],\n \"top_themes\":[\"\",\"\",\"\"],\n \"quotes\":[{\"text\":\"\",\"review_id\":\"\",\"theme\":\"\"}],\n \"fee_issue\":{\"found\":true,\"title\":\"\",\"description\":\"\",\"supporting_review_ids\":[],\"count\":0},\n \"key_observation\":\"\"}\nREVIEWS:\n{{ $json.reviews_block }}\n",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        512,
+        0
+      ],
+      "id": "6a360f0c-7623-4007-8e6f-929dad46e4a5",
+      "name": "Insights LLM"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        448,
+        128
+      ],
+      "id": "2b16d6e6-5c2e-4bd6-96ee-ee793217ec0a",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const formatNode = $('Format Reviews').first().json;\nconst raw = String($json.text ?? $json.output ?? $json.response ?? '').trim();\nif (!raw) {\n  throw new Error('Insights LLM returned no text. Check the LLM node output and try again.');\n}\n\nconst cleaned = raw\n  .replace(/^```(?:json)?\\s*/i, '')\n  .replace(/\\s*```$/, '')\n  .trim();\n\nlet insights;\ntry {\n  insights = JSON.parse(cleaned);\n} catch (err) {\n  throw new Error('Insights output is not valid JSON: ' + err.message);\n}\n\nif (!insights || typeof insights !== 'object') {\n  throw new Error('Insights output is not a JSON object.');\n}\nif (!Array.isArray(insights.themes)) {\n  throw new Error('\"themes\" must be an array.');\n}\nif (insights.themes.length > 5) {\n  throw new Error('themes has ' + insights.themes.length + ' entries; the limit is 5.');\n}\nif (!Array.isArray(insights.top_themes) || insights.top_themes.length !== 3) {\n  throw new Error('top_themes must have exactly 3 entries.');\n}\nif (!Array.isArray(insights.quotes)) {\n  throw new Error('\"quotes\" must be an array.');\n}\nif (insights.quotes.length !== 3) {\n  throw new Error('quotes has ' + insights.quotes.length + ' entries; exactly 3 are required.');\n}\n\nconst allText = String(formatNode.all_text ?? '');\nconst validIds = new Set(\n  Array.isArray(formatNode.valid_ids) ? formatNode.valid_ids.map((id) => String(id)) : [],\n);\n\ninsights.quotes.forEach((quote, i) => {\n  const label = 'quote ' + (i + 1);\n  if (!quote || typeof quote.text !== 'string' || quote.text.trim() === '') {\n    throw new Error(label + ' has no text.');\n  }\n  if (!allText.includes(quote.text)) {\n    const where = quote.review_id ? ' (review_id ' + quote.review_id + ')' : '';\n    throw new Error(label + where + ' is not found word for word in the reviews. Previous output failed: copy quotes character for character.');\n  }\n});\n\nconst fee = insights.fee_issue;\nif (!fee || typeof fee !== 'object') {\n  throw new Error('\"fee_issue\" is missing.');\n}\nif (fee.found === true) {\n  const ids = Array.isArray(fee.supporting_review_ids) ? fee.supporting_review_ids.map((id) => String(id)) : [];\n  if (ids.length < 3) {\n    throw new Error('fee_issue has ' + ids.length + ' supporting review_ids; at least 3 are required.');\n  }\n  const missing = ids.filter((id) => !validIds.has(id));\n  if (missing.length > 0) {\n    throw new Error('fee_issue supporting review_ids not found in the reviews: ' + missing.join(', ') + '.');\n  }\n} else if (fee.found !== false) {\n  throw new Error('fee_issue.found must be true or false.');\n}\n\nreturn [{ json: insights }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "id": "fc29ac2a-eb34-4164-b011-004d41d290eb",
+      "name": "Check Insights"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Write a Weekly Product Pulse for the ChatGPT mobile product team (goal: increase voice input usage).\nMarkdown, 250 words MAX including headings. Sections:\n## Top Themes (3 bullets, include review counts)\n## What Users Are Saying (the 3 quotes, verbatim, in quotation marks, with theme)\n## Key Observation (2-3 sentences; mention the fee issue, and voice input if relevant)\n## Action Ideas (exactly 3 numbered, specific and testable)\nUse ONLY this JSON. No new facts or quotes.\n{{ JSON.stringify($json) }}\n",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1104,
+        0
+      ],
+      "id": "b2c2047a-6b3b-4907-af4c-617a35941e85",
+      "name": "Pulse LLM"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1040,
+        128
+      ],
+      "id": "d64b4ba0-589f-4fb0-a9d8-383f934567cf",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = String($json.text ?? $json.output ?? $json.response ?? '').trim();\nif (!raw) {\n  throw new Error('Pulse LLM returned no text. Check the LLM node output and try again.');\n}\n\nconst pulse = raw\n  .replace(/^```(?:markdown|md)?\\s*/i, '')\n  .replace(/\\s*```$/, '')\n  .trim();\n\nconst lines = pulse.split('\\n');\nconst words = pulse\n  .split(/\\s+/)\n  .filter((token) => token.replace(/[#*_`>-]/g, '').length > 0).length;\n\nif (words > 250) {\n  throw new Error('The pulse is ' + words + ' words; the limit is 250. Your output was ' + words + ' words. Rewrite in 220 words or fewer.');\n}\n\nconst sections = ['Top Themes', 'What Users Are Saying', 'Key Observation', 'Action Ideas'];\nfor (const title of sections) {\n  const found = lines.some((line) => {\n    const match = line.match(/^#{1,6}\\s+(.*)$/);\n    return match && match[1].trim().toLowerCase().startsWith(title.toLowerCase());\n  });\n  if (!found) {\n    throw new Error('The pulse is missing the section \"## ' + title + '\".');\n  }\n}\n\nconst actionStart = lines.findIndex((line) => {\n  const match = line.match(/^#{1,6}\\s+(.*)$/);\n  return match && match[1].trim().toLowerCase().startsWith('action ideas');\n});\nconst actionLines = [];\nfor (let i = actionStart + 1; i < lines.length; i += 1) {\n  if (/^#{1,6}\\s+/.test(lines[i])) break;\n  actionLines.push(lines[i]);\n}\nconst numbered = actionLines.filter((line) => /^\\s*\\d+[.)]\\s+/.test(line));\nif (numbered.length !== 3) {\n  throw new Error('Action Ideas has ' + numbered.length + ' numbered items; exactly 3 are required.');\n}\n\nconst insights = $('Check Insights').first().json;\nconst quotes = Array.isArray(insights.quotes) ? insights.quotes : [];\nif (quotes.length !== 3) {\n  throw new Error('Check Insights did not return 3 quotes, so the pulse cannot be verified.');\n}\nquotes.forEach((quote, i) => {\n  if (!pulse.includes(String(quote.text))) {\n    throw new Error('Quote ' + (i + 1) + ' (review_id ' + quote.review_id + ') from insights is missing or altered in the pulse.');\n  }\n});\n\nreturn [{ json: { pulse, word_count: words } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1472,
+        0
+      ],
+      "id": "27de8922-b6d9-4711-bf75-9aaa2295fcca",
+      "name": "Check Pulse"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "895ffda4-3c83-4eb6-83db-82d47ecdfe89",
+              "name": "source_url_1",
+              "value": "https://help.openai.com/en/articles/7232895-how-do-i-request-a-refund-for-my-chatgpt-subscription",
+              "type": "string"
+            },
+            {
+              "id": "ecfa88fa-9093-4b90-b5c1-eb4e1dda7eeb",
+              "name": "source_url_2",
+              "value": "https://help.openai.com/en/articles/20001043-how-do-i-avoid-being-charged-twice-if-i-subscribe-to-chatgpt-on-ios-android-and-the-web",
+              "type": "string"
+            },
+            {
+              "id": "e5015aec-670b-495f-99ba-ce7eb6a32924",
+              "name": "source_facts",
+              "value": "SOURCE 1 (https://help.openai.com/en/articles/7232895-how-do-i-request-a-refund-for-my-chatgpt-subscription): Payments are generally non-refundable, but refunds may be approved for a verified OpenAI billing error, a validated unauthorized charge, or a documented service or access failure; For an unused individual subscription, a discretionary refund may be possible if the request is made within seven days of the charge and meets eligibility conditions such as no substantial use and no active payment dispute; Cancelling a subscription only stops future renewals and does not by itself make a refund available; Refunds for web and Google Play subscriptions are requested through the Help Center chat while logged in to the account that was charged, and the chat shows an eligibility summary first; Subscriptions bought through Apple must be cancelled or refunded through Apple; An approved web refund is processed within 5 to 7 business days (up to 10 for Google Play), and how soon the money reaches a bank or card also depends on the bank\n\nSOURCE 2 (https://help.openai.com/en/articles/20001043-how-do-i-avoid-being-charged-twice-if-i-subscribe-to-chatgpt-on-ios-android-and-the-web): A ChatGPT subscription is managed by the platform where it was bought (Apple App Store, Google Play or chatgpt.com), so starting a new subscription on one platform before cancelling the old one on another can result in several active subscriptions and charges; Users can check for existing subscriptions on each platform: iPhone Settings, then their name, then Subscriptions; Google Play Menu, then Subscriptions; and chatgpt.com Settings, then the Account section; A subscription should be cancelled on the same platform where it was started, and uninstalling the app does not cancel an Apple or Google Play subscription; If an Apple renewal fails, the subscription is not automatically cancelled and Apple may keep trying to recover it, so updating the Apple payment method later can trigger a renewal that duplicates a subscription started elsewhere; A verified duplicate billing error can be reviewed for correction, but holding two separately purchased subscriptions does not by itself qualify for a refund; For refunds, Apple subscriptions go through Apple, Google Play subscriptions go through OpenAI Support while signed in to the charged account, and chatgpt.com subscriptions, or cases where the platform is unclear, go through support",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        1696,
+        0
+      ],
+      "id": "d466c525-facc-41dd-b26a-d4e1076953c3",
+      "name": "Source Facts"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Write a customer Fee Explainer for support teams.\nIssue found in reviews: {{ $('Check Insights').first().json.fee_issue.title }} - {{ $('Check Insights').first().json.fee_issue.description }}\nUse ONLY these official source facts (do not add outside facts): {{ $json.source_facts }}\nLinks: 1) {{ $json.source_url_1 }} 2) {{ $json.source_url_2 }}\nRules: 6 bullets MAX; neutral, facts-only; no apology, promises, blame or marketing;\nno exact prices or limits unless they appear in the source facts; no words\n\"sorry\", \"unfortunately\", \"guarantee\", \"always\", \"never\".\nReturn ONLY JSON: {\"bullets\":[],\"source_links\":[\"url1\",\"url2\"],\"last_checked\":\"{{ $now.format('yyyy-MM-dd') }}\"}\n",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1920,
+        0
+      ],
+      "id": "b0098dcd-3361-421a-9397-4ebbca42fae2",
+      "name": "Fee LLM"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        1856,
+        208
+      ],
+      "id": "0474d3e9-d545-4c4b-9e2c-f9bd082f675b",
+      "name": "OpenAI Chat Model2",
+      "credentials": {
+        "openAiApi": {
+          "id": null,
+          "name": "",
+          "__aiGatewayManaged": true
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = String($json.text ?? $json.output ?? $json.response ?? '').trim();\nif (!raw) {\n  throw new Error('Fee LLM returned no text. Check the LLM node output and try again.');\n}\n\nconst cleaned = raw\n  .replace(/^```(?:json)?\\s*/i, '')\n  .replace(/\\s*```$/, '')\n  .trim();\n\nlet fee;\ntry {\n  fee = JSON.parse(cleaned);\n} catch (err) {\n  throw new Error('Fee Explainer output is not valid JSON: ' + err.message);\n}\n\nif (!Array.isArray(fee.bullets) || fee.bullets.length === 0) {\n  throw new Error('Fee Explainer must have a \"bullets\" array with at least 1 bullet.');\n}\nif (fee.bullets.length > 6) {\n  throw new Error('Fee Explainer has ' + fee.bullets.length + ' bullets; the limit is 6.');\n}\nif (!Array.isArray(fee.source_links) || fee.source_links.length !== 2) {\n  const found = Array.isArray(fee.source_links) ? fee.source_links.length : 0;\n  throw new Error('Fee Explainer must have exactly 2 source_links; found ' + found + '.');\n}\n\nconst today = $now.toFormat('yyyy-MM-dd');\nif (!fee.last_checked || String(fee.last_checked).trim() === '') {\n  throw new Error('Fee Explainer is missing the \"last_checked\" date.');\n}\nif (String(fee.last_checked).trim() !== today) {\n  throw new Error('last_checked is ' + fee.last_checked + ' but today is ' + today + '.');\n}\n\nconst banned = ['sorry', 'unfortunately', 'guarantee', 'always', 'never'];\nfee.bullets.forEach((bullet, i) => {\n  const text = String(bullet ?? '');\n  if (!text.trim()) {\n    throw new Error('Bullet ' + (i + 1) + ' is empty.');\n  }\n  for (const word of banned) {\n    if (new RegExp('\\\\b' + word + '\\\\b', 'i').test(text)) {\n      throw new Error('Bullet ' + (i + 1) + ' uses banned wording: \"' + word + '\". Neutral wording is required.');\n    }\n  }\n});\n\nreturn [{ json: fee }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2288,
+        0
+      ],
+      "id": "4d64e896-948d-4bb2-ac2b-38228d0c7584",
+      "name": "Check Fee"
+    },
+    {
+      "parameters": {
+        "jsCode": "const insights = $('Check Insights').first().json;\nconst pulseNode = $('Check Pulse').first().json;\nconst fee = $json;\n\nconst topThemes = Array.isArray(insights.top_themes) ? insights.top_themes : [];\nif (topThemes.length !== 3) {\n  throw new Error('top_themes must have exactly 3 entries; found ' + topThemes.length + '.');\n}\n\nconst weeklyPulse = String(pulseNode.pulse ?? '').trim();\nif (!weeklyPulse) {\n  throw new Error('Check Pulse did not produce a pulse text.');\n}\n\nconst issueTitle = String((insights.fee_issue && insights.fee_issue.title) || '').trim();\nconst issueDescription = String((insights.fee_issue && insights.fee_issue.description) || '').trim();\nconst identifiedFeeIssue =\n  issueTitle && issueDescription ? issueTitle + ' - ' + issueDescription : issueTitle || issueDescription;\nif (!identifiedFeeIssue) {\n  throw new Error('The identified fee issue is empty; check the fee_issue fields in Check Insights.');\n}\n\nif (!Array.isArray(fee.bullets) || fee.bullets.length === 0) {\n  throw new Error('Check Fee did not return explanation bullets.');\n}\nif (!Array.isArray(fee.source_links) || fee.source_links.length !== 2) {\n  throw new Error('Check Fee did not return exactly 2 source links.');\n}\n\nconst payload = {\n  date: $now.toFormat('yyyy-MM-dd'),\n  top_themes: topThemes,\n  weekly_pulse: weeklyPulse,\n  identified_fee_issue: identifiedFeeIssue,\n  explanation_bullets: fee.bullets.map((bullet) => String(bullet)),\n  source_links: fee.source_links.map((link) => String(link)),\n  last_checked: String(fee.last_checked ?? '').trim(),\n};\n\nreturn [{ json: payload }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2512,
+        0
+      ],
+      "id": "609a3bf5-252a-4d9b-a107-8c2e0b446c1e",
+      "name": "Merge Payload"
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "sendTo": "your-email@example.com",
+        "subject": "=Approve Weekly Product Pulse - {{ $json.date }}",
+        "message": "=Please review before anything is saved or drafted.\n\nTOP THEMES: {{ $json.top_themes.join(', ') }}\n\nWEEKLY PULSE:\n{{ $json.weekly_pulse }}\n\nFEE ISSUE: {{ $json.identified_fee_issue }}\n\nEXPLANATION:\n{{ $json.explanation_bullets.join(' | ') }}\n\nSOURCES: {{ $json.source_links.join(' | ') }}",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double"
+          }
+        },
+        "options": {
+          "limitWaitTime": {
+            "values": {
+              "resumeAmount": 24
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2736,
+        0
+      ],
+      "id": "ee029d2d-5a2c-441e-aa9d-e3491106fb3c",
+      "name": "Approval Gate",
+      "webhookId": "b1d0d3e2-f608-4f5b-b906-dddcb7c8565e",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "QB0dq7VABisnpjMk",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "4b86c464-233d-47b9-8120-bfa8fd565831",
+              "leftValue": "={{ $json.data.approved }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2960,
+        0
+      ],
+      "id": "46b22473-41ee-4d58-8844-ab4a669d3311",
+      "name": "Approved?"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "YOUR_GOOGLE_DOC_URL",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "insert",
+              "text": "==== {{ $('Merge Payload').first().json.date }} ===\nTop themes: {{ $('Merge Payload').first().json.top_themes.join(', ') }}\n\nWeekly Pulse:\n{{ $('Merge Payload').first().json.weekly_pulse }}\n\nIdentified fee issue: {{ $('Merge Payload').first().json.identified_fee_issue }}\n\nExplanation:\n{{ $('Merge Payload').first().json.explanation_bullets.map(b => '- ' + b).join('\\n') }}\n\nSources: {{ $('Merge Payload').first().json.source_links.join(' | ') }}\nLast checked: {{ $('Merge Payload').first().json.last_checked }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        3184,
+        -96
+      ],
+      "id": "b1a5194b-f29d-4aa1-bf34-17ecdf3e434f",
+      "name": "Append to Doc",
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "KG2AObUazfqTfx0R",
+          "name": "Google Docs account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "=Weekly Product Pulse + Customer Clarification — {{ $('Merge Payload').first().json.date }}",
+        "message": "=Hi team,\n\nWEEKLY PRODUCT PULSE\n{{ $('Merge Payload').first().json.weekly_pulse }}\n\nCUSTOMER CLARIFICATION (reusable support snippet)\nIssue: {{ $('Merge Payload').first().json.identified_fee_issue }}\n{{ $('Merge Payload').first().json.explanation_bullets.map(b => '- ' + b).join('\\n') }}\n\nSources: {{ $('Merge Payload').first().json.source_links.join(' | ') }}\nLast checked: {{ $('Merge Payload').first().json.last_checked }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        3408,
+        -96
+      ],
+      "id": "21cf741c-2ac5-481b-af42-eca5170c5eb2",
+      "name": "Create Draft",
+      "webhookId": "98a31d5e-9614-417c-b2a2-3db618e924d7",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "QB0dq7VABisnpjMk",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        3184,
+        96
+      ],
+      "id": "5d25d65c-aeee-486c-9b62-8f59501885c1",
+      "name": "Rejected"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Upload Reviews": {
+      "main": [
+        [
+          {
+            "node": "Read CSV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read CSV": {
+      "main": [
+        [
+          {
+            "node": "Format Reviews",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Reviews": {
+      "main": [
+        [
+          {
+            "node": "Insights LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Insights LLM",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insights LLM": {
+      "main": [
+        [
+          {
+            "node": "Check Insights",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Insights": {
+      "main": [
+        [
+          {
+            "node": "Pulse LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Pulse LLM",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pulse LLM": {
+      "main": [
+        [
+          {
+            "node": "Check Pulse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Pulse": {
+      "main": [
+        [
+          {
+            "node": "Source Facts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Source Facts": {
+      "main": [
+        [
+          {
+            "node": "Fee LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Fee LLM",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fee LLM": {
+      "main": [
+        [
+          {
+            "node": "Check Fee",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Fee": {
+      "main": [
+        [
+          {
+            "node": "Merge Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Payload": {
+      "main": [
+        [
+          {
+            "node": "Approval Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approval Gate": {
+      "main": [
+        [
+          {
+            "node": "Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved?": {
+      "main": [
+        [
+          {
+            "node": "Append to Doc",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append to Doc": {
+      "main": [
+        [
+          {
+            "node": "Create Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "390f924b-c546-46dd-b245-1b4068c67ab4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5b57990ac4f0f460fa47b4d17dcdc3dd2066cd51a8c35666f5443870899642c8"
+  },
+  "nodeGroups": [],
+  "id": "ccOD9yKJZ6IuFdTm",
+  "tags": []
+}

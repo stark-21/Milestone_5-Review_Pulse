@@ -1,0 +1,15 @@
+{
+  "name": "milestone5",
+  "version": "1.0.0",
+  "description": "Review-to-Insight workflow for the ChatGPT mobile app (goal: increase voice input usage)",
+  "type": "module",
+  "scripts": {
+    "collect": "node scripts/collect_reviews.js",
+    "clean": "node scripts/clean_reviews.js"
+  },
+  "dependencies": {
+    "csv-parse": "7.0.3",
+    "csv-stringify": "6.9.0",
+    "google-play-scraper": "10.1.3"
+  }
+}
