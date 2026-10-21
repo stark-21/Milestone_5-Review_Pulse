@@ -111,7 +111,7 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "=Write a Weekly Product Pulse for the ChatGPT mobile product team (goal: increase voice input usage).\nMarkdown, 250 words MAX including headings. Sections:\n## Top Themes (3 bullets, include review counts)\n## What Users Are Saying (the 3 quotes, verbatim, in quotation marks, with theme)\n## Key Observation (2-3 sentences; mention the fee issue, and voice input if relevant)\n## Action Ideas (exactly 3 numbered, specific and testable)\nUse ONLY this JSON. No new facts or quotes.\n{{ JSON.stringify($json) }}\n",
+        "text": "=Write a Weekly Product Pulse for the ChatGPT mobile product team (goal: increase voice input usage).\nMarkdown. Sections:\n## Top Themes (3 bullets, include review counts)\n## What Users Are Saying (the 3 quotes, verbatim, in quotation marks, with theme)\n## Key Observation (2-3 sentences; mention the fee issue, and voice input if relevant)\n## Action Ideas (exactly 3 numbered, specific and testable)\nLENGTH RULE: The whole pulse, including headings, bullets and quotes, must be 200 words or fewer. Aim for 170 to 200 words. Never exceed 200. Keep quotes short and use at most 3 quotes.\nUse ONLY this JSON. No new facts or quotes.\n{{ JSON.stringify($json) }}\n",
         "batching": {}
       },
       "type": "@n8n/n8n-nodes-langchain.chainLlm",

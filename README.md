@@ -91,7 +91,7 @@ Both Help Center pages were updated shortly before they were read, so re-check t
 
 - A temperature error means the OpenAI node still has a Sampling Temperature option; remove it.
 - In Code nodes use `$now.toFormat(...)`, not `$now.format(...)`.
-- If a check node fails with "quotes not found" or a word-count message, run the AI node before it again. The model varies slightly between runs.
+- If a check node fails with "quotes not found", run the AI node before it again. The model varies slightly between runs. The pulse is written to 200 words or fewer and the check stops the run above 250.
 - If the run skips the approval pause, Approval Gate is pinned. Unpin it.
 - If the request is too long, lower the review limit in Format Reviews (for example to 500).
 - The fee issue rests on 4 reviews, so treat it as a signal to look into and not as a measured rate.
