@@ -57,12 +57,11 @@ if (!fee || typeof fee !== 'object') {
 }
 if (fee.found === true) {
   const ids = Array.isArray(fee.supporting_review_ids) ? fee.supporting_review_ids.map((id) => String(id)) : [];
-  if (ids.length < 3) {
-    throw new Error('fee_issue has ' + ids.length + ' supporting review_ids; at least 3 are required.');
-  }
-  const missing = ids.filter((id) => !validIds.has(id));
-  if (missing.length > 0) {
-    throw new Error('fee_issue supporting review_ids not found in the reviews: ' + missing.join(', ') + '.');
+  const matched = ids.filter((id) => validIds.has(id));
+  fee.supporting_review_ids = matched;
+  fee.count = matched.length;
+  if (matched.length < 3) {
+    throw new Error('fee_issue has ' + matched.length + ' supporting review_ids found in the reviews (of ' + ids.length + ' provided); at least 3 are required.');
   }
 } else if (fee.found !== false) {
   throw new Error('fee_issue.found must be true or false.');
