@@ -4,10 +4,9 @@ This project turns recent Google Play reviews of the ChatGPT mobile app into pro
 
 ## Prototype
 
-- **Prototype link (n8n form): https://tejas2103.app.n8n.cloud/form/a0920746-7371-4e5b-a0c1-2e5531c6c3a4
-- **GitHub repository: https://github.com/stark-21/Milestone_5-Review_Pulse
+- **Prototype link (n8n form):** https://tejas2103.app.n8n.cloud/form/a0920746-7371-4e5b-a0c1-2e5531c6c3a4
+- **GitHub repository:** https://github.com/stark-21/Milestone_5-Review_Pulse
 - **Input file:** `data/reviews_clean.csv` (700 rows). Download it from the repository: https://github.com/stark-21/Milestone_5-Review_Pulse/blob/main/data/reviews_clean.csv (open the file and click the download icon, "Download raw file").
-
 
 To try it: open the link, upload `data/reviews_clean.csv` and submit. The form confirms straight away and the workflow keeps running in the background for about 1 to 3 minutes, then pauses at the approval step. The approval email goes to the project owner's Gmail, so only the owner can approve a run; the steps and expected results are documented below. Please use the 700-row file. The 20-row sample may not contain enough charge-related reviews to pass the fee-issue check.
 
