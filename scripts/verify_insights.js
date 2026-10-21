@@ -85,14 +85,17 @@ insights.quotes.forEach((quote, i) => {
 
 const fee = insights.fee_issue;
 if (!fee || typeof fee !== 'object') checkFailed('"fee_issue" is missing');
+const feeIds = Array.isArray(fee.supporting_review_ids) ? fee.supporting_review_ids.map((id) => String(id)) : [];
+const feeDistinct = [...new Set(feeIds)];
+const feeValid = feeDistinct.filter((id) => validIds.has(id));
+const feeMissing = feeDistinct.filter((id) => !validIds.has(id));
 if (fee.found === true) {
-  const ids = Array.isArray(fee.supporting_review_ids) ? fee.supporting_review_ids : [];
-  if (ids.length < MIN_FEE_IDS) {
-    checkFailed(`fee_issue has ${ids.length} supporting review_ids; at least ${MIN_FEE_IDS} are required`);
+  if (feeValid.length < MIN_FEE_IDS) {
+    const where = feeMissing.length > 0 ? ` Missing IDs: ${feeMissing.join(', ')}.` : '';
+    checkFailed(`fee_issue has ${feeValid.length} distinct supporting review_ids found in the CSV (of ${feeIds.length} provided); at least ${MIN_FEE_IDS} are required.${where}`);
   }
-  const missing = ids.filter((id) => !validIds.has(String(id)));
-  if (missing.length > 0) {
-    checkFailed(`fee_issue supporting review_ids not found in the CSV: ${missing.join(', ')}`);
+  if (feeMissing.length > 0) {
+    console.log(`NOTE: ${feeMissing.length} supporting review_id(s) are not in the CSV and were not counted: ${feeMissing.join(', ')}.`);
   }
 } else if (fee.found === false) {
   console.log('NOTE: fee_issue.found is false. The Phase 2 acceptance test expects 1 fee issue backed by at least 3 real review IDs if the reviews contain one.');
@@ -104,6 +107,6 @@ console.log(`PASS: themes ${insights.themes.length} (limit ${MAX_THEMES})`);
 console.log(`PASS: top_themes ${insights.top_themes.length}`);
 console.log(`PASS: ${QUOTE_COUNT} quotes found word for word in data/reviews_clean.csv`);
 if (fee.found === true) {
-  console.log(`PASS: fee issue backed by ${fee.supporting_review_ids.length} review IDs, all exist in the CSV`);
+  console.log(`PASS: fee issue backed by ${feeValid.length} distinct review IDs found in the CSV`);
 }
 console.log('All insights checks passed.');

@@ -3,9 +3,18 @@ From the reviews below:
 1. Group into AT MOST 5 themes (name, one-line description, review_ids, count, voice_relevance: high|medium|low|none).
 2. Pick the TOP 3 themes by count (ties: lower average rating first).
 3. Give EXACTLY 3 quotes copied WORD FOR WORD from single reviews, under 30 words each, with review_id and theme. Do not fix spelling or combine reviews.
-4. Find EXACTLY 1 recurring confusion or pain point about a fee or charge, backed by at least 3 review_ids. If none exists, set found to false and explain.
+4. Identify one recurring confusion or pain point about a fee or
+charge, supported by at least 3 DISTINCT reviews describing the same
+underlying problem. Copy each supporting review_id exactly as printed
+in square brackets before its review. Never invent, shorten, re-case,
+or modify an ID. Use only IDs present in the supplied reviews.
+
+If fewer than 3 distinct reviews support the same fee-related problem,
+set found to false, supporting_review_ids to [], and count to 0.
+Explain the insufficient evidence in the title and description.
 5. Add a 1-2 sentence key observation about what is going wrong or trending.
-Use ONLY the reviews. Never invent quotes or numbers. Return ONLY valid JSON:
+Use ONLY the supplied reviews. Never invent quotes, review IDs, or
+numbers. Return ONLY valid JSON:
 {"themes":[{"name":"","description":"","review_ids":[],"count":0,"voice_relevance":""}],
  "top_themes":["","",""],
  "quotes":[{"text":"","review_id":"","theme":""}],

@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "collect": "node scripts/collect_reviews.js",
-    "clean": "node scripts/clean_reviews.js"
+    "clean": "node scripts/clean_reviews.js",
+    "test": "node scripts/test_check_insights_fee.js && node scripts/test_workflow_sync.js",
+    "verify": "node scripts/verify_insights.js",
+    "check:pulse": "node scripts/check_pulse.js"
   },
   "dependencies": {
     "csv-parse": "7.0.3",

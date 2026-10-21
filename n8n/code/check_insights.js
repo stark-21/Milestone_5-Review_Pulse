@@ -57,13 +57,17 @@ if (!fee || typeof fee !== 'object') {
 }
 if (fee.found === true) {
   const ids = Array.isArray(fee.supporting_review_ids) ? fee.supporting_review_ids.map((id) => String(id)) : [];
-  const matched = ids.filter((id) => validIds.has(id));
+  const matched = [...new Set(ids.filter((id) => validIds.has(id)))];
+  const unmatched = ids.filter((id) => !validIds.has(id));
   fee.supporting_review_ids = matched;
   fee.count = matched.length;
   if (matched.length < 3) {
-    throw new Error('fee_issue has ' + matched.length + ' supporting review_ids found in the reviews (of ' + ids.length + ' provided); at least 3 are required.');
+    throw new Error('fee_issue has ' + matched.length + ' distinct supporting review_ids found in the reviews (of ' + ids.length + ' provided); at least 3 are required.\nUnmatched IDs: ' + JSON.stringify(unmatched));
   }
-} else if (fee.found !== false) {
+} else if (fee.found === false) {
+  fee.supporting_review_ids = [];
+  fee.count = 0;
+} else {
   throw new Error('fee_issue.found must be true or false.');
 }
 
